@@ -3,5 +3,6 @@
 !.travis.*
 *.py[co]
 *~
+*.egg-info
 doc/_build
 website/*.db
