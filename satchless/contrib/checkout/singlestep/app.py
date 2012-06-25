@@ -1,5 +1,6 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.template.response import TemplateResponse
+from django.forms.models import modelformset_factory
 
 from ....checkout import app
 from ....core.app import view
@@ -9,11 +10,19 @@ class SingleStepCheckoutApp(app.CheckoutApp):
     checkout_templates = [
         'satchless/checkout/checkout.html'
     ]
+    ShippingForm = None
+    ShippingFormSet = None
 
     def __init__(self, *args, **kwargs):
         super(SingleStepCheckoutApp, self).__init__(*args, **kwargs)
-        assert self.BillingForm, ('You need to subclass SingleStepCheckoutApp '
-                                  'and provide BillingForm')
+        assert ((self.ShippingForm or self.ShippingFormSet) and 
+                self.BillingForm), ('You need to subclass SingleStepCheckoutApp '
+                                  'and provide BillingForm and ShippingForm')
+        self.ShippingFormSet = (
+                self.ShippingFormSet or
+                modelformset_factory(self.ShippingForm._meta.model,
+                    form=self.ShippingForm,
+                    extra=0))
 
     @view(r'^(?P<order_token>\w+)/$', name='checkout')
     def checkout(self, request, order_token):
@@ -51,18 +60,24 @@ class SingleStepCheckoutApp(app.CheckoutApp):
         billing_form = self.BillingForm(request.POST or None,
                                         instance=order)
         payment_form = self.payment_queue.get_configuration_form(order, request.POST)
+        delivery_groups = order.groups.filter(require_shipping_address=True)
+        shipping_formset = self.ShippingFormSet(data=request.POST or None,
+            queryset=delivery_groups)
         if request.method == 'POST':
             billing_valid = billing_form.is_valid()
             payment_valid = payment_form.is_valid() if payment_form else True
-            if billing_valid and delivery_valid and payment_valid:
+            shipping_valid = shipping_formset.is_valid()
+            if billing_valid and delivery_valid and payment_valid and shipping_valid:
                 order = billing_form.save()
                 for group, typ, form in delivery_group_forms:
                     self.delivery_queue.save(group, form)
                 self.payment_queue.save(order, payment_form)
+                shipping_formset.save()
                 order.set_status('payment-pending')
                 return self.redirect('confirmation',
                                      order_token=order.token)
         context = self.get_context_data(request, billing_form=billing_form,
                                         delivery_group_forms=delivery_group_forms,
-                                        order=order, payment_form=payment_form)
+                                        order=order, payment_form=payment_form,
+                                        shipping_formset=shipping_formset)
         return TemplateResponse(request, self.checkout_templates, context)
