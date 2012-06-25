@@ -61,7 +61,7 @@ class TargetpayIdealProvider(PaymentProvider):
         E.g. call this function after the payment has been processed to check
         the result and update the order accordingly.
         """
-        v = order.payment_variant
+        v = order.paymentvariant
         try:
             settings.ideal.checkPayment(v.transaction_id)
             order.status = 'payment-complete'
