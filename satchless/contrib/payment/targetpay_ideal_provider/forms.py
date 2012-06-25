@@ -16,5 +16,5 @@ class TargetpayIdealRedirectForm(forms.Form):
     def __init__(self, params, *args, **kwargs):
         super(TargetpayIdealRedirectForm, self).__init__(*args, **kwargs)
         for param in params:
-            self.base_fields[param[0]] = forms.CharField(initial=param[1],
+            self.fields[param[0]] = forms.CharField(initial=param[1],
                 widget=forms.HiddenInput)
