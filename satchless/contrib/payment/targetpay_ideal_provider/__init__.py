@@ -29,6 +29,8 @@ class TargetpayIdealProvider(PaymentProvider):
         order.payment_price = 0
         order.payment_type_name = 'Ideal'
         order.payment_type_description = ''
+        if order.paymentvariant.id:
+            form.instance = order.paymentvariant
         if form.is_valid():
             form.save()
         else:
@@ -64,9 +66,9 @@ class TargetpayIdealProvider(PaymentProvider):
         v = order.paymentvariant
         try:
             settings.ideal.checkPayment(v.transaction_id)
-            order.status = 'payment-complete'
-        except TargetpayException, e:
-            order.status = 'payment-failed'
+            order.set_status('payment-complete')
+        except TargetPayException, e:
+            order.set_status('payment-failed')
             v.result_code = e.args[0]
             v.save()
         finally:
