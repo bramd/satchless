@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.forms import Form
 from django.utils.translation import ugettext_lazy as _
 
@@ -29,8 +30,10 @@ class TargetpayIdealProvider(PaymentProvider):
         order.payment_price = 0
         order.payment_type_name = 'Ideal'
         order.payment_type_description = ''
-        if order.paymentvariant.id:
+        try:
             form.instance = order.paymentvariant
+        except ObjectDoesNotExist:
+            pass
         if form.is_valid():
             form.save()
         else:
