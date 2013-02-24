@@ -5,9 +5,7 @@ from django.contrib.auth.models import User
 from django.test import Client
 import os
 
-from ...pricing.app import ProductAppPricingMixin
 from ...product.app import MagicProductApp
-from ...product.tests.pricing import FiveZlotyPriceHandler
 from ...product.tests import Parrot, ParrotVariant, DeadParrot, ZombieParrot, DeadParrotVariantForm
 from ...util.tests import ViewsTestCase
 
@@ -15,17 +13,17 @@ from .. import app
 from . import TestCart, TestCartItem
 
 
-class TestProductApp(ProductAppPricingMixin, MagicProductApp):
+class TestProductApp(MagicProductApp):
 
     Product = Parrot
     Variant = ParrotVariant
 
-product_app = TestProductApp(pricing_handler=FiveZlotyPriceHandler())
+product_app = TestProductApp()
 
 
 class TestCartApp(app.MagicCartApp):
+
     app_name = 'test_cart_app'
-    cart_type = 'test_cart_app'
 
     Cart = TestCart
     CartItem = TestCartItem
@@ -83,7 +81,7 @@ class MagicAppTestCase(ViewsTestCase):
         client = client or self.client
         self._test_status(cart_app.reverse('details'), client_instance=client)
         cart_token = client.session[cart_app.cart_session_key]
-        return cart_app.Cart.objects.get(token=cart_token, typ=cart_app.cart_type)
+        return cart_app.Cart.objects.get(token=cart_token)
 
     def test_add_to_cart_form_on_product_view(self):
         response = self._test_status(self.macaw.get_absolute_url(),
@@ -104,7 +102,7 @@ class MagicAppTestCase(ViewsTestCase):
                           client_instance=client, status_code=200)
         self._test_status(self.macaw.get_absolute_url(),
                           method='post',
-                          data={'typ': cart_app.cart_type,
+                          data={'target': cart.token,
                                 'color': self.macaw_blue_fake.color,
                                 'looks_alive': self.macaw_blue_fake.looks_alive,
                                 'quantity': 2},
@@ -141,7 +139,6 @@ class MagicAppTestCase(ViewsTestCase):
         cart_item_form = response.context['cart_item_forms'][0]
         data = {
             'quantity': 2,
-            'request_marker': '',
         }
         data = dict((cart_item_form.add_prefix(key), value)
                     for (key, value) in data.items())
@@ -162,9 +159,10 @@ class MagicAppTestCase(ViewsTestCase):
 
     def test_add_to_cart_form_handles_incorrect_data(self):
         cli_anon = Client()
+        cart = self._get_or_create_cart_for_client(cli_anon)
         response = self._test_status(self.macaw.get_absolute_url(),
                                      method='post',
-                                     data={'typ': cart_app.cart_type,
+                                     data={'target': cart.token,
                                            'color': 'blue',
                                            'looks_alive': 1,
                                            'quantity': 'alkjl'},

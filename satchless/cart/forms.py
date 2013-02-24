@@ -4,6 +4,7 @@ from django.utils.translation import ugettext_lazy as _, ugettext
 from ..forms.widgets import DecimalInput
 from ..product.forms import registry
 
+
 class QuantityForm(object):
 
     def clean_quantity(self):
@@ -22,15 +23,14 @@ class AddToCartForm(forms.Form, QuantityForm):
     """
 
     quantity = forms.DecimalField(_('Quantity'), initial=1)
-    typ = forms.CharField(max_length=100, widget=forms.HiddenInput())
+    target = forms.CharField(max_length=100, widget=forms.HiddenInput())
 
-    def __init__(self, data=None, *args, **kwargs):
-        typ = kwargs.pop('typ')
-        if data and data.get('typ') != typ:
+    def __init__(self, cart, data=None, *args, **kwargs):
+        self.cart = cart
+        if data and data.get('target') != self.cart.token:
             data = None
-        self.cart = kwargs.pop('cart', None)
         super(AddToCartForm, self).__init__(data=data, *args, **kwargs)
-        self.fields['typ'].initial = typ
+        self.fields['target'].initial = self.cart.token
 
     def clean(self):
         data = super(AddToCartForm, self).clean()
@@ -50,7 +50,6 @@ class AddToCartForm(forms.Form, QuantityForm):
 
 
 class EditCartItemForm(forms.ModelForm, QuantityForm):
-    request_marker = forms.CharField(widget=forms.HiddenInput(), required=False)
 
     class Meta:
         widgets = {
@@ -59,8 +58,6 @@ class EditCartItemForm(forms.ModelForm, QuantityForm):
 
     def __init__(self, *args, **kwargs):
         super(EditCartItemForm, self).__init__(*args, **kwargs)
-        self.is_bound = (self.is_bound and
-                         self.add_prefix('request_marker') in self.data)
         if not self.is_bound:
             self.data = None
 
@@ -85,6 +82,8 @@ def add_to_cart_variant_form_for_product(product,
                                          addtocart_formclass=AddToCartForm,
                                          registry=registry):
     variant_formclass = registry.get_handler(type(product))
+
     class AddVariantToCartForm(addtocart_formclass, variant_formclass):
         pass
+
     return AddVariantToCartForm

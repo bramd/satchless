@@ -18,17 +18,14 @@ class CartApp(SatchlessApp):
 
     app_name = 'cart'
     namespace = 'cart'
-    cart_type = 'cart'
     CartItemForm = None
     Cart = None
 
     cart_templates = [
-        'satchless/cart/%(cart_type)s/view.html',
         'satchless/cart/view.html'
     ]
 
-    def __init__(self, pricing_handler, *args, **kwargs):
-        self.pricing_handler = pricing_handler
+    def __init__(self, *args, **kwargs):
         super(CartApp, self).__init__(*args, **kwargs)
         assert self.Cart, ('You need to subclass CartApp and provide Cart')
         assert self.CartItemForm, ('You need to subclass CartApp and'
@@ -38,7 +35,7 @@ class CartApp(SatchlessApp):
         raise NotImplementedError()
 
     def _get_cart_item_form(self, request, item):
-        prefix = '%s-%i' % (self.cart_type, item.id)
+        prefix = 'cart-%i' % (item.id,)
         form = self.CartItemForm(data=request.POST or None,
                                  instance=item,
                                  prefix=prefix)
@@ -66,13 +63,8 @@ class CartApp(SatchlessApp):
         context = self._handle_cart(cart, request)
         if isinstance(context, HttpResponse):
             return context
-        context = self.get_context_data(
-            request, pricing_handler=self.pricing_handler, **context)
-        format_data = {
-            'cart_type': self.cart_type,
-        }
-        templates = [t % format_data for t in self.cart_templates]
-        response = TemplateResponse(request, templates, context)
+        context = self.get_context_data(request, **context)
+        response = TemplateResponse(request, self.cart_templates, context)
         if request.is_ajax():
             return JSONResponse({'total': len(cart.get_all_items()),
                                  'html': response.rendered_content})
@@ -95,13 +87,8 @@ class MagicCartApp(CartApp):
     CartItem = None
     AddToCartHandler = handler.AddToCartHandler
 
-    def __init__(self, product_app, pricing_handler=None, **kwargs):
+    def __init__(self, product_app, **kwargs):
         self.product_app = product_app
-        pricing_handler = pricing_handler or getattr(product_app,
-                                                     'pricing_handler', None)
-        if not pricing_handler:
-            raise ValueError('Requires either a pricing handler '
-                             'or product app with pricing handler')
 
         self.Cart = self.Cart or self.construct_cart_class()
         self.CartItem = (self.CartItem or
@@ -113,7 +100,7 @@ class MagicCartApp(CartApp):
         if self.AddToCartHandler:
             add_to_cart_handler = self.AddToCartHandler(cart_app=self)
             product_app.register_product_view_handler(add_to_cart_handler)
-        super(MagicCartApp, self).__init__(pricing_handler=pricing_handler, **kwargs)
+        super(MagicCartApp, self).__init__(**kwargs)
 
     def construct_cart_class(self):
         class Cart(models.Cart):
@@ -135,16 +122,15 @@ class MagicCartApp(CartApp):
 
     @property
     def cart_session_key(self):
-        return '_satchless_cart-%s' % self.cart_type
+        return '_satchless_cart'
 
     def get_cart_for_request(self, request):
         try:
             token = request.session[self.cart_session_key]
-            cart = self.Cart.objects.get(typ=self.cart_type,
-                                         token=token)
+            cart = self.Cart.objects.get(token=token)
         except (self.Cart.DoesNotExist, KeyError):
             owner = request.user if request.user.is_authenticated() else None
-            cart = self.Cart.objects.create(typ=self.cart_type, owner=owner)
+            cart = self.Cart.objects.create(owner=owner)
             request.session[self.cart_session_key] = cart.token
         if cart.owner is None and request.user.is_authenticated():
             cart.owner = request.user

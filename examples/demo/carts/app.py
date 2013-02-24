@@ -11,8 +11,11 @@ from . import forms
 from . import handler
 from . import models
 
+
 class CartApp(satchless.cart.app.MagicCartApp):
     AddToCartHandler = None
+    Cart = models.Cart
+    CartItem = models.CartItem
 
 cart_app = CartApp(product_app)
 
@@ -20,7 +23,6 @@ cart_app = CartApp(product_app)
 class WishlistApp(satchless.cart.app.MagicCartApp):
     app_name = 'wishlist'
     namespace = 'wishlist'
-    cart_type = 'wishlist'
     Cart = models.Wishlist
     CartItem = models.WishlistItem
     CartItemForm = forms.WishlistAddToCartItemForm
@@ -31,13 +33,15 @@ class WishlistApp(satchless.cart.app.MagicCartApp):
         super(WishlistApp, self).__init__(*args, **kwargs)
 
     def _get_cart_item_form(self, request, item):
-        prefix = '%s-%i' % (self.cart_type, item.id)
+        prefix = 'wishlist-%i' % (item.id,)
 
         cart = self.cart_app.get_cart_for_request(request)
         variant = item.variant.get_subtype_instance()
         variant_formclass = registry.get_handler(type(variant.product))
+
         class AddVariantToCartForm(self.CartItemForm, variant_formclass):
             pass
+
         initial = django.forms.models.model_to_dict(
             item.variant, variant_formclass.base_fields.keys())
         form = AddVariantToCartForm(cart=cart, data=request.POST or None,
